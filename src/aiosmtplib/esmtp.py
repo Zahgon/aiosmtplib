@@ -1,6 +1,3 @@
-"""
-ESMTP utils
-"""
 
 import re
 
@@ -40,17 +37,11 @@ def parse_esmtp_extensions(message: str) -> tuple[dict[str, str], list[str]]:
     esmtp_extensions: dict[str, str] = {}
     auth_types: list[str] = []
 
-    # Skip the greeting line; each remaining line is "KEYWORD [params]".
     for line in message.split("\n")[1:]:
         line = line.strip()
         if not line:
             continue
 
-        # To be able to communicate with as many SMTP servers as possible,
-        # we have to take the old-style "AUTH=method[ method...]" advertisement
-        # into account. Some servers only advertise the auth methods we support
-        # using the old style, so register the extension here too (not just the
-        # methods) to keep supports_extension("auth") accurate.
         oldstyle_auth = OLDSTYLE_AUTH_REGEX.fullmatch(line)
         if oldstyle_auth is not None:
             params = oldstyle_auth["auth"]
@@ -58,9 +49,6 @@ def parse_esmtp_extensions(message: str) -> tuple[dict[str, str], list[str]]:
             auth_types.extend(method.lower() for method in params.split())
             continue
 
-        # RFC 1869 requires a space between the ehlo keyword and its parameters
-        # (and only spaces between parameters, though we don't enforce that).
-        # The space isn't present when there are no parameters.
         keyword, _, params = line.partition(" ")
         keyword = keyword.lower()
         esmtp_extensions[keyword] = params

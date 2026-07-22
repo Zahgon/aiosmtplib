@@ -1,6 +1,3 @@
-"""
-Authentication related methods.
-"""
 
 import base64
 import hmac

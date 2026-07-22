@@ -21,9 +21,6 @@ __all__ = (
 
 
 class SMTPException(Exception):
-    """
-    Base class for all SMTP exceptions.
-    """
 
     def __init__(self, message: str, /) -> None:
         self.message = message
@@ -31,46 +28,30 @@ class SMTPException(Exception):
 
 
 class SMTPServerDisconnected(SMTPException, ConnectionError):
-    """
-    The connection was lost unexpectedly, or a command was run that requires
-    a connection.
-    """
+    pass
 
 
 class SMTPConnectError(SMTPException, ConnectionError):
-    """
-    An error occurred while connecting to the SMTP server.
-    """
+    pass
 
 
 class SMTPTimeoutError(SMTPException, TimeoutError):
-    """
-    A timeout occurred while performing a network operation.
-    """
+    pass
 
 
 class SMTPConnectTimeoutError(SMTPTimeoutError, SMTPConnectError):
-    """
-    A timeout occurred while connecting to the SMTP server.
-    """
+    pass
 
 
 class SMTPReadTimeoutError(SMTPTimeoutError):
-    """
-    A timeout occurred while waiting for a response from the SMTP server.
-    """
+    pass
 
 
 class SMTPNotSupported(SMTPException):
-    """
-    A command or argument sent to the SMTP server is not supported.
-    """
+    pass
 
 
 class SMTPResponseException(SMTPException):
-    """
-    Base class for all server responses with error codes.
-    """
 
     def __init__(self, code: int, message: str, /) -> None:
         self.code = code
@@ -79,33 +60,22 @@ class SMTPResponseException(SMTPException):
 
 
 class SMTPConnectResponseError(SMTPResponseException, SMTPConnectError):
-    """
-    The SMTP server returned an invalid response code after connecting.
-    """
+    pass
 
 
 class SMTPHeloError(SMTPResponseException):
-    """
-    Server refused HELO or EHLO.
-    """
+    pass
 
 
 class SMTPDataError(SMTPResponseException):
-    """
-    Server refused DATA content.
-    """
+    pass
 
 
 class SMTPAuthenticationError(SMTPResponseException):
-    """
-    Server refused our AUTH request; may be caused by invalid credentials.
-    """
+    pass
 
 
 class SMTPSenderRefused(SMTPResponseException):
-    """
-    SMTP server refused the message sender.
-    """
 
     def __init__(self, code: int, message: str, sender: str, /) -> None:
         self.code = code
@@ -115,9 +85,6 @@ class SMTPSenderRefused(SMTPResponseException):
 
 
 class SMTPRecipientRefused(SMTPResponseException):
-    """
-    SMTP server refused a message recipient.
-    """
 
     def __init__(self, code: int, message: str, recipient: str, /) -> None:
         self.code = code
@@ -127,9 +94,6 @@ class SMTPRecipientRefused(SMTPResponseException):
 
 
 class SMTPRecipientsRefused(SMTPException):
-    """
-    SMTP server refused multiple recipients.
-    """
 
     def __init__(self, recipients: list[SMTPRecipientRefused], /) -> None:
         self.recipients = recipients

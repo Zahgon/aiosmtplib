@@ -1,6 +1,3 @@
-"""
-Email message and address formatting/parsing functions.
-"""
 
 import copy
 import email.charset
@@ -54,7 +51,6 @@ def flatten_message(
     utf8: bool = False,
     cte_type: str = "8bit",
 ) -> bytes:
-    # Make a local copy so we can delete the bcc headers.
     message_copy = copy.copy(message)
     del message_copy["Bcc"]
     del message_copy["Resent-Bcc"]
@@ -69,8 +65,6 @@ def flatten_message(
             generator = email.generator.BytesGenerator(messageio, policy=policy)
             generator.flatten(message_copy)
         else:
-            # Old message class, Compat32 policy. Compat32 cannot use UTF8
-            # Mypy can't handle message unions, so just use different vars
             compat_policy = email.policy.compat32
             if cte_type != "8bit":
                 compat_policy = compat_policy.clone(cte_type=cte_type)
@@ -95,7 +89,6 @@ def extract_addresses(
     """
     addresses: list[str] = []
     if isinstance(header, email.headerregistry.AddressHeader):
-        # If the object has been assigned an iterable, it's possible to get a string here.
         header_addresses = cast(
             Iterable[str | email.headerregistry.Address], header.addresses
         )
@@ -132,7 +125,6 @@ def extract_sender(
         sender_header_name = "Sender"
         from_header_name = "From"
 
-    # Prefer the sender field per RFC 2822:3.6.2.
     if sender_header_name in message:
         sender_header = message[sender_header_name]
     else:

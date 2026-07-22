@@ -1,6 +1,3 @@
-"""
-Main public API.
-"""
 
 import email.message
 import socket

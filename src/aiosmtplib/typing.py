@@ -17,9 +17,6 @@ SocketPathType = str | bytes | os.PathLike[str]
 
 
 class Default(enum.Enum):
-    """
-    Used for type hinting kwarg defaults.
-    """
 
     token = 0
 
@@ -29,11 +26,6 @@ _default = Default.token
 
 @enum.unique
 class SMTPStatus(enum.IntEnum):
-    """
-    Defines SMTP statuses for code readability.
-
-    See also: http://www.greenend.org.uk/rjk/tech/smtpreplies.html
-    """
 
     invalid_response = -1
     system_status_ok = 211

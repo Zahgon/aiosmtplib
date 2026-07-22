@@ -1,6 +1,3 @@
-"""
-An ``asyncio.Protocol`` subclass for lower level IO handling.
-"""
 
 import asyncio
 import collections
@@ -23,27 +20,13 @@ __all__ = ("SMTPProtocol",)
 
 
 MAX_LINE_LENGTH = 8192
-# A whole response (including multiline continuations) may not exceed this.
-# Bounds memory if a server streams data with no line ending or endless
-# continuation lines; generous over any real EHLO, which is a few KB.
 MAX_RESPONSE_LENGTH = MAX_LINE_LENGTH * 4
 LINE_ENDINGS_REGEX = re.compile(rb"(?:\r\n|\n|\r(?!\n))")
 PERIOD_REGEX = re.compile(rb"(?m)^\.")
-# Reject all C0 controls + DEL; CR/LF/NUL in particular enable injection.
 COMMAND_INJECTION_REGEX = re.compile(rb"[\x00-\x1f\x7f]")
 
 
 class FlowControlMixin(asyncio.Protocol):
-    """
-    Reusable flow control logic for StreamWriter.drain().
-    This implements the protocol methods pause_writing(),
-    resume_writing() and connection_lost().  If the subclass overrides
-    these it must call the super methods.
-    StreamWriter.drain() must wait for _drain_helper() coroutine.
-
-    Copied from stdlib as per recommendation: https://bugs.python.org/msg343685.
-    Logging and asserts removed, type annotations added.
-    """
 
     def __init__(self, loop: asyncio.AbstractEventLoop | None = None) -> None:
         if loop is None:
@@ -58,39 +41,16 @@ class FlowControlMixin(asyncio.Protocol):
         self._connection_lost = False
 
     def pause_writing(self) -> None:
-        self._paused = True
+        pass
 
     def resume_writing(self) -> None:
-        self._paused = False
-
-        for waiter in self._drain_waiters:
-            if not waiter.done():
-                waiter.set_result(None)
+        pass
 
     def connection_lost(self, exc: Exception | None) -> None:
-        self._connection_lost = True
-        # Wake up the writer(s) if currently paused.
-        if not self._paused:
-            return
-
-        for waiter in self._drain_waiters:
-            if not waiter.done():
-                if exc is None:
-                    waiter.set_result(None)
-                else:
-                    waiter.set_exception(exc)
+        pass
 
     async def _drain_helper(self) -> None:
-        if self._connection_lost:
-            raise ConnectionResetError("Connection lost")
-        if not self._paused:
-            return
-        waiter = self._loop.create_future()
-        self._drain_waiters.append(waiter)
-        try:
-            await waiter
-        finally:
-            self._drain_waiters.remove(waiter)
+        pass
 
     def _get_close_waiter(self, stream: asyncio.StreamWriter) -> "asyncio.Future[None]":
         raise NotImplementedError
@@ -106,10 +66,6 @@ class SMTPProtocol(FlowControlMixin, asyncio.BaseProtocol):
         self._over_ssl = False
         self._buffer = bytearray()
         self._response_waiter: asyncio.Future[SMTPResponse] | None = None
-        # True only while a command is actually awaiting a response. Used to
-        # discard unsolicited data that arrives between commands, which would
-        # otherwise be stored on the (freshly created) waiter and mis-paired
-        # with the next command's response.
         self._response_pending = False
 
         self.transport: asyncio.BaseTransport | None = None
@@ -119,155 +75,32 @@ class SMTPProtocol(FlowControlMixin, asyncio.BaseProtocol):
         self._connection_lost_callback = connection_lost_callback
 
     def _get_close_waiter(self, stream: asyncio.StreamWriter) -> "asyncio.Future[None]":
-        return self._closed_future
+        pass
 
     def __del__(self) -> None:
-        # Avoid 'Future exception was never retrieved' warnings
-        # Some unknown race conditions can sometimes trigger these :(
         self._retrieve_response_exception()
 
     @property
     def is_connected(self) -> bool:
-        """
-        Check if our transport is still connected.
-        """
-        return bool(self.transport is not None and not self.transport.is_closing())
+        pass
 
     def connection_made(self, transport: asyncio.BaseTransport) -> None:
-        self.transport = cast(asyncio.Transport, transport)
-        self._over_ssl = transport.get_extra_info("sslcontext") is not None
-        self._response_waiter = self._loop.create_future()
-        self._command_lock = asyncio.Lock()
-        self._quit_sent = False
-        # The server's greeting is expected immediately after connecting, and
-        # may arrive before read_response() is awaited, so arm the flag now.
-        self._response_pending = True
+        pass
 
     def connection_lost(self, exc: Exception | None) -> None:
-        super().connection_lost(exc)
-
-        if self._response_waiter and not self._response_waiter.done():
-            if self._quit_sent:
-                self._response_waiter.set_result(
-                    SMTPResponse(SMTPStatus.closing.value, "")
-                )
-            else:
-                smtp_exc = SMTPServerDisconnected("Connection lost")
-                if exc:
-                    smtp_exc.__cause__ = exc
-                self._response_waiter.set_exception(smtp_exc)
-
-        self.transport = None
-        self._command_lock = None
-
-        if self._connection_lost_callback:
-            self._connection_lost_callback()
+        pass
 
     def data_received(self, data: bytes) -> None:
-        if self._response_waiter is None:
-            raise RuntimeError(
-                f"data_received called without a response waiter set: {data!r}"
-            )
-        elif not self._response_pending or self._response_waiter.done():
-            # We got data without an outstanding command (or a response is
-            # already parsed and awaiting pickup); ignore it so it can't be
-            # mis-paired with a later command's response.
-            return
-
-        self._buffer.extend(data)
-
-        if len(self._buffer) > MAX_RESPONSE_LENGTH:
-            del self._buffer[:]
-            self._response_waiter.set_exception(
-                SMTPResponseException(
-                    SMTPStatus.invalid_response.value, "Response too long"
-                )
-            )
-            return
-
-        # If we got an obvious partial message, don't try to parse the buffer
-        last_linebreak = data.rfind(b"\n")
-        if (
-            last_linebreak == -1
-            or data[last_linebreak + 3 : last_linebreak + 4] == b"-"
-        ):
-            return
-
-        try:
-            response = self._read_response_from_buffer()
-        except Exception as exc:
-            self._response_waiter.set_exception(exc)
-        else:
-            if response is not None:
-                self._response_waiter.set_result(response)
+        pass
 
     def eof_received(self) -> bool:
-        exc = SMTPServerDisconnected("Unexpected EOF received")
-        if self._response_waiter and not self._response_waiter.done():
-            self._response_waiter.set_exception(exc)
-
-        # Returning false closes the transport
-        return False
+        pass
 
     def _retrieve_response_exception(self) -> BaseException | None:
-        """
-        Return any exception that has been set on the response waiter.
-
-        Used to avoid 'Future exception was never retrieved' warnings
-        """
-        if (
-            self._response_waiter
-            and self._response_waiter.done()
-            and not self._response_waiter.cancelled()
-        ):
-            return self._response_waiter.exception()
-
-        return None
+        pass
 
     def _read_response_from_buffer(self) -> SMTPResponse | None:
-        """Parse the actual response (if any) from the data buffer"""
-        code = -1
-        message = bytearray()
-        offset = 0
-        message_complete = False
-
-        while True:
-            line_end_index = self._buffer.find(b"\n", offset)
-            if line_end_index == -1:
-                break
-
-            line = bytes(self._buffer[offset : line_end_index + 1])
-
-            if len(line) > MAX_LINE_LENGTH:
-                raise SMTPResponseException(
-                    SMTPStatus.invalid_response.value, "Response too long"
-                )
-
-            try:
-                code = int(line[:3])
-            except ValueError:
-                error_text = line.decode("utf-8", errors="ignore")
-                raise SMTPResponseException(
-                    SMTPStatus.invalid_response.value,
-                    f"Malformed SMTP response line: {error_text}",
-                ) from None
-
-            offset += len(line)
-            if len(message):
-                message.extend(b"\n")
-            message.extend(line[4:].strip(b" \t\r\n"))
-            if line[3:4] != b"-":
-                message_complete = True
-                break
-
-        if message_complete:
-            response = SMTPResponse(
-                code, bytes(message).decode("utf-8", "surrogateescape")
-            )
-            del self._buffer[:offset]
-            return response
-        else:
-            return None
+        pass
 
     async def read_response(self, timeout: float | None = None) -> SMTPResponse:
         """
@@ -284,8 +117,6 @@ class SMTPProtocol(FlowControlMixin, asyncio.BaseProtocol):
         if self._response_waiter is None:
             raise SMTPServerDisconnected("Connection lost")
 
-        # Safety net: guarantees the flag is set for reads not preceded by a
-        # command write (e.g. the initial server greeting).
         self._response_pending = True
         try:
             result = await asyncio.wait_for(self._response_waiter, timeout)
@@ -293,7 +124,6 @@ class SMTPProtocol(FlowControlMixin, asyncio.BaseProtocol):
             raise SMTPReadTimeoutError("Timed out waiting for server response") from exc
         finally:
             self._response_pending = False
-            # If we were disconnected, don't create a new waiter
             if self.transport is None:
                 self._response_waiter = None
             else:
@@ -307,7 +137,6 @@ class SMTPProtocol(FlowControlMixin, asyncio.BaseProtocol):
 
         try:
             cast(asyncio.WriteTransport, self.transport).write(data)
-        # uvloop raises NotImplementedError, asyncio doesn't have a write method
         except (AttributeError, NotImplementedError):
             raise RuntimeError(
                 f"Transport {self.transport!r} does not support writing."
@@ -328,8 +157,6 @@ class SMTPProtocol(FlowControlMixin, asyncio.BaseProtocol):
         command = b" ".join(args) + b"\r\n"
 
         async with self._command_lock:
-            # Mark a reply as expected before sending, so data arriving after
-            # the write can never be mistaken for unsolicited data.
             self._response_pending = True
             self.write(command)
 
@@ -360,7 +187,6 @@ class SMTPProtocol(FlowControlMixin, asyncio.BaseProtocol):
         message += b".\r\n"
 
         async with self._command_lock:
-            # Mark a reply as expected before each send (see execute_command).
             self._response_pending = True
             self.write(b"DATA\r\n")
             start_response = await self.read_response(timeout=timeout)
@@ -381,54 +207,4 @@ class SMTPProtocol(FlowControlMixin, asyncio.BaseProtocol):
         server_hostname: str | None = None,
         timeout: float | None = None,
     ) -> SMTPResponse:
-        """
-        Puts the connection to the SMTP server into TLS mode.
-        """
-        if self._over_ssl:
-            raise RuntimeError("Already using TLS.")
-        if self._command_lock is None:
-            raise SMTPServerDisconnected("Server not connected")
-
-        async with self._command_lock:
-            # Mark a reply as expected before sending (see execute_command).
-            self._response_pending = True
-            self.write(b"STARTTLS\r\n")
-            response = await self.read_response(timeout=timeout)
-            if response.code != SMTPStatus.ready:
-                raise SMTPResponseException(response.code, response.message)
-
-            # Check for disconnect after response
-            if self.transport is None or self.transport.is_closing():
-                raise SMTPServerDisconnected("Connection lost")
-
-            # STARTTLS injection defense (RFC 3207 section 4.2): a compliant
-            # server sends nothing after its 220 reply until TLS is negotiated.
-            # Any bytes still buffered here are plaintext a MITM may have
-            # injected; discard them so they cannot be misread as part of the
-            # encrypted session once the handshake completes.
-            del self._buffer[:]
-
-            try:
-                tls_transport = await self._loop.start_tls(
-                    cast(asyncio.WriteTransport, self.transport),
-                    self,
-                    tls_context,
-                    server_side=False,
-                    server_hostname=server_hostname,
-                    ssl_handshake_timeout=timeout,
-                )
-            except (TimeoutError, asyncio.TimeoutError) as exc:
-                raise SMTPTimeoutError("Timed out while upgrading transport") from exc
-            # SSLProtocol only raises ConnectionAbortedError on timeout
-            except ConnectionAbortedError as exc:
-                raise SMTPTimeoutError(
-                    "Connection aborted while upgrading transport"
-                ) from exc
-            except ConnectionError as exc:
-                raise SMTPServerDisconnected(
-                    "Connection reset while upgrading transport"
-                ) from exc
-
-            self.transport = tls_transport
-
-        return response
+        pass
